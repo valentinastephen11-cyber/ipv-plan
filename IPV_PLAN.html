@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IPV PLAN</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f9fafb; margin: 0; padding: 0; }
+    .container { max-width: 600px; margin: 20px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    h1 { text-align: center; color: #111827; }
+    input, button { width: 100%; padding: 10px; margin-top: 8px; border-radius: 8px; border: 1px solid #d1d5db; }
+    button { background: #2563eb; color: white; border: none; cursor: pointer; }
+    button:hover { background: #1e40af; }
+    .hidden { display: none; }
+    .lesson { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-top: 8px; background: #f3f4f6; }
+    #qr { text-align: center; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>IPV PLAN</h1>
+
+    <div id="setup-owner" class="section">
+      <h3>Persediaan Pemegang (Owner)</h3>
+      <input type="text" id="ownerName" placeholder="Nama" />
+      <input type="email" id="ownerEmail" placeholder="Emel" />
+      <input type="password" id="ownerPass" placeholder="Kata Laluan" />
+      <button onclick="registerOwner()">Daftar Pemegang</button>
+    </div>
+
+    <div id="login-section" class="section hidden">
+      <h3>Log Masuk</h3>
+      <input type="email" id="loginEmail" placeholder="Emel" />
+      <input type="password" id="loginPass" placeholder="Kata Laluan" />
+      <button onclick="loginUser()">Log Masuk</button>
+    </div>
+
+    <div id="owner-dashboard" class="section hidden">
+      <h3>Dashboard Pemegang</h3>
+      <input type="text" id="classTitle" placeholder="Tajuk Kelas (cth: IPv4 Asas)" />
+      <button onclick="createClass()">Buat Kelas</button>
+      <div id="classes"></div>
+    </div>
+
+    <div id="student-join" class="section hidden">
+      <h3>Sertai Kelas</h3>
+      <input type="text" id="joinId" placeholder="ID Kelas" />
+      <input type="text" id="joinToken" placeholder="Token" />
+      <input type="text" id="studentName" placeholder="Nama" />
+      <input type="email" id="studentEmail" placeholder="Emel" />
+      <input type="password" id="studentPass" placeholder="Kata Laluan" />
+      <button onclick="joinClass()">Masuk Kelas</button>
+    </div>
+
+    <div id="lesson-section" class="section hidden">
+      <h3>Pelajaran IPv4</h3>
+      <div id="lessons"></div>
+    </div>
+  </div>
+
+  <script>
+    const store = {
+      get(k, f){ try{return JSON.parse(localStorage.getItem(k)) ?? f;}catch{return f;} },
+      set(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+    };
+
+    let currentUser = store.get('currentUser', null);
+    let users = store.get('users', []);
+    let classes = store.get('classes', []);
+
+    function show(id){ document.querySelectorAll('.section').forEach(s=>s.classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); }
+
+    function init(){
+      if(!users.some(u=>u.role==='owner')) show('setup-owner');
+      else if(!currentUser) show('login-section');
+      else if(currentUser.role==='owner') show('owner-dashboard');
+      else show('student-join');
+      renderClasses();
+    }
+
+    function registerOwner(){
+      const name = ownerName.value.trim(), email = ownerEmail.value.trim(), pass = ownerPass.value.trim();
+      if(!name||!email||!pass) return alert('Isi semua medan.');
+      if(users.some(u=>u.email===email)) return alert('Emel sudah digunakan');
+      const u = {id:Date.now(), name,email,password:pass,role:'owner'};
+      users.push(u); store.set('users',users); store.set('currentUser',u); currentUser=u; alert('Owner didaftarkan!'); init();
+    }
+
+    function loginUser(){
+      const email = loginEmail.value.trim(), pass = loginPass.value.trim();
+      const u = users.find(x=>x.email===email && x.password===pass);
+      if(!u) return alert('Salah emel atau kata laluan');
+      store.set('currentUser',u); currentUser=u; alert('Selamat datang '+u.name); init();
+    }
+
+    function createClass(){
+      const title = classTitle.value.trim(); if(!title) return alert('Masukkan tajuk kelas');
+      const id = 'C'+Math.random().toString(36).substr(2,5);
+      const token = 'T'+Math.random().toString(36).substr(2,5);
+      const c = {id,title,token,lessons:sampleLessons()};
+      classes.push(c); store.set('classes',classes); renderClasses(); alert('Kelas dibuat!');
+    }
+
+    function renderClasses(){
+      const div=document.getElementById('classes'); if(!div) return;
+      div.innerHTML='';
+      classes.forEach(c=>{
+        const el=document.createElement('div'); el.className='lesson';
+        el.innerHTML=`<b>${c.title}</b><br>ID: ${c.id}<br>Token: ${c.token}<div id="qr-${c.id}"></div>`;
+        div.appendChild(el);
+        new QRCode(document.getElementById(`qr-${c.id}`), JSON.stringify({classId:c.id, token:c.token}));
+      });
+    }
+
+    function joinClass(){
+      const id=joinId.value.trim(), token=joinToken.value.trim(), n=studentName.value.trim(), e=studentEmail.value.trim(), p=studentPass.value.trim();
+      const cls=classes.find(c=>c.id===id && c.token===token);
+      if(!cls) return alert('Kelas tidak ditemui');
+      let u=users.find(x=>x.email===e);
+      if(!u){u={id:Date.now(),name:n,email:e,password:p,role:'student'};users.push(u);} else u.password=p;
+      store.set('users',users); store.set('currentUser',u); currentUser=u;
+      alert('Berjaya masuk ke kelas '+cls.title); showLessons(cls);
+    }
+
+    function sampleLessons(){
+      return [
+        {t:'Apa itu IPv4?', c:'IPv4 ialah protokol 32-bit yang digunakan untuk mengenal pasti peranti dalam rangkaian. Contoh: 192.168.0.1'},
+        {t:'Subnetting asas', c:'Subnetting membahagikan rangkaian kepada rangkaian kecil untuk pengurusan lebih efisien.'},
+        {t:'Alamat awam vs swasta', c:'Alamat awam digunakan di internet, manakala alamat swasta hanya di dalam LAN.'}
+      ];
+    }
+
+    function showLessons(cls){
+      show('lesson-section');
+      const div=document.getElementById('lessons'); div.innerHTML='';
+      cls.lessons.forEach(l=>{
+        const el=document.createElement('div'); el.className='lesson'; el.innerHTML=`<b>${l.t}</b><br>${l.c}`; div.appendChild(el);
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
